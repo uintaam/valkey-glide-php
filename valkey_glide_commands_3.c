@@ -26,6 +26,7 @@
 #include "valkey_glide_commands_common.h"
 #include "valkey_glide_core_common.h"
 #include "valkey_glide_hash_common.h"
+#include "valkey_glide_persistent.h"
 #include "valkey_glide_prefix.h"
 #include "valkey_glide_z_common.h"
 
@@ -689,8 +690,8 @@ void execute_script_command(zval* object, int argc, zval* return_value, zend_cla
     valkey_glide_object* valkey_glide;
     char*                operation = NULL;
     size_t               operation_len;
-    zval*                z_args;
-    int                  args_count;
+    zval*                z_args       = NULL;
+    int                  args_count   = 0;
     int                  param_offset = 0;
 
     /* Check if this is a cluster call (has route parameter first) */
@@ -1055,6 +1056,10 @@ int execute_exec_command(zval* object, int argc, zval* return_value, zend_class_
             return 0;
         }
         status = 1; /* Assume success unless we find issues */
+        /* EXEC ran on the server, which clears WATCH */
+        if (valkey_glide->batch_type == MULTI) {
+            valkey_glide->persistent_watching = false;
+        }
         if (result->response) {
             if (result->response->response_type != Array ||
                 result->response->array_value_len != valkey_glide->command_count) {
@@ -2018,6 +2023,14 @@ int execute_client_command(zval* object, int argc, zval* return_value, zend_clas
         return 0;
     }
 
+    /* CLIENT SETNAME, TRACKING, REPLY, ... change the connection's state */
+    int sub_idx = (is_cluster && !valkey_glide->is_in_batch_mode && arg_count >= 2) ? 1 : 0;
+    if (arg_count > sub_idx && Z_TYPE(z_args[sub_idx]) == IS_STRING &&
+        valkey_glide_command_changes_connection_state(
+            "CLIENT", 6, Z_STRVAL(z_args[sub_idx]), Z_STRLEN(z_args[sub_idx]))) {
+        valkey_glide_mark_connection_state_changed(valkey_glide);
+    }
+
     /* Check if we're in batch mode */
     if (valkey_glide->is_in_batch_mode) {
         /* In batch mode, ignore routing and treat all arguments as command arguments */
@@ -2145,6 +2158,17 @@ int execute_rawcommand_command(zval* object, int argc, zval* return_value, zend_
         if (zend_parse_method_parameters(argc, object, "O+", &object, ce, &z_args, &arg_count) ==
             FAILURE) {
             return 0;
+        }
+    }
+
+    /* SELECT, AUTH, CLIENT SETNAME, SUBSCRIBE, ... change the connection's state */
+    if (Z_TYPE(z_args[0]) == IS_STRING) {
+        bool        has_sub = arg_count > 1 && Z_TYPE(z_args[1]) == IS_STRING;
+        const char* sub     = has_sub ? Z_STRVAL(z_args[1]) : NULL;
+        size_t      sub_len = has_sub ? Z_STRLEN(z_args[1]) : 0;
+        if (valkey_glide_command_changes_connection_state(
+                Z_STRVAL(z_args[0]), Z_STRLEN(z_args[0]), sub, sub_len)) {
+            valkey_glide_mark_connection_state_changed(valkey_glide);
         }
     }
 

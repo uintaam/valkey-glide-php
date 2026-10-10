@@ -12,10 +12,18 @@
 * `exec()` after an empty `multi()` or `pipeline()` now returns `[]` and leaves batch mode, as in PHPRedis; previously it returned `false` and left the client in batch mode, so every later command was buffered and never sent. An empty or discarded `multi()` also clears `WATCH`, as the server's `EXEC`/`DISCARD` would
 * `functionLoad($code, true)` and `function('load', $code, true)` now send `FUNCTION LOAD REPLACE <code>`; previously `REPLACE` was sent after the code and the server rejected the command
 * `functionLoad()` and `function('load', ...)` called inside `multi()` or `pipeline()` are now queued with the batch and return the client, instead of executing immediately outside the transaction
+* `ValkeyGlideCluster::__construct()` on an already connected object now throws instead of replacing (and leaking) the existing client
+* The pub/sub callback registry is released at the end of each request; it was allocated per request but reused by later requests in the same worker (PHP-FPM)
+* Failing to build the connection request is reported as an exception instead of dereferencing a NULL response
+* `clone` on a `ValkeyGlide` or `ValkeyGlideCluster` object now throws an `Error`; the copy shared the client handle and crashed on first use
+* `script()`, `geoadd()`, `geohash()`, `geopos()`, `xinfo()`, `zadd()` and cluster route parsing no longer read uninitialized variadic arguments when called without them (`script('FLUSH')` could crash)
+* A client (`ValkeyGlide`, `ValkeyGlideCluster`, `ValkeyGlideMonitor`) inherited through `fork()` is no longer closed by the child, which crashed (macOS) or hung (Linux) the child at exit. Calling a method on it in the child, directly or through `call_user_func()`, Reflection or a closure, now throws `ValkeyGlideException`, except `close()`, which only drops the handle, and `getLastError()`, `clearLastError()`, `getOption()` and `setOption()`, which do not use the client. Creating a new client in a child after the parent used GLIDE still crashes or hangs until the core is fixed ([#349](https://github.com/valkey-io/valkey-glide-php/issues/349))
 
 ### Changes
 
 * Add PHPRedis-compatible client-side key prefixing: `OPT_PREFIX` (via `setOption()`/`getOption()`) and `_prefix()` for standalone and cluster clients. The prefix is applied to every key argument, including multi-key commands, the `KEYS` of `EVAL`/`EVALSHA`/`FCALL`, and commands queued in `multi()`/`pipeline()`. `OPT_SCAN` with `SCAN_PREFIX`/`SCAN_NOPREFIX` controls whether the `SCAN` `MATCH` pattern is prefixed ([#342](https://github.com/valkey-io/valkey-glide-php/issues/342))
+* Add persistent clients for PHP-FPM and other long-lived worker processes: `connect(persistent_id: ...)` and `new ValkeyGlideCluster(persistent: true)` keep the client open after the request and reuse it in later requests that use the same configuration, instead of connecting (and, for clusters, discovering the topology) on every request. New ini setting `valkey_glide.max_persistent_clients` (default 32) caps kept clients per process. See "Persistent Clients" in the README ([#219](https://github.com/valkey-io/valkey-glide-php/issues/219))
+* Add `ValkeyGlide::pconnect()`, which takes the same arguments as `connect()` and always uses a persistent client (PHPRedis compatible)
 * Add `HGETDEL` command for standalone and cluster clients ([#343](https://github.com/valkey-io/valkey-glide-php/pull/343))
 * Add PHP 8.4 and 8.5 to the supported versions and the CI test matrix
 * Add `READ_FROM_AZ_AFFINITY_ALL_NODES` read strategy for standalone and cluster clients ([#316](https://github.com/valkey-io/valkey-glide-php/issues/316))

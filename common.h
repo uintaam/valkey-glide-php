@@ -9,6 +9,8 @@
  * glide-core that validate_printable_ascii() below depends on. Use explicit byte
  * ranges instead. */
 #include <stdio.h>
+#include <sys/types.h>
+#include <unistd.h>
 #include <zend_smart_str.h>
 
 #include "include/glide_bindings.h"
@@ -419,6 +421,8 @@ typedef enum {
 /* OPT_SCAN values, numerically identical to PHPRedis */
 #define VALKEY_GLIDE_SCAN_PREFIX 2   /* Prefix the SCAN MATCH pattern with OPT_PREFIX */
 #define VALKEY_GLIDE_SCAN_NOPREFIX 3 /* Send the SCAN MATCH pattern unchanged (default) */
+/* Persistent client entry (valkey_glide_persistent.c) */
+typedef struct valkey_glide_persistent_client valkey_glide_persistent_client_t;
 
 typedef struct {
     const void*           glide_client; /* Valkey Glide client pointer */
@@ -435,8 +439,17 @@ typedef struct {
 
     AddressResolverCallback resolver_cb; /* NULL if no address resolver */
 
+    /* Persistent client (persistent_id / $persistent), NULL if not persistent */
+    valkey_glide_persistent_client_t* persistent;
+    zend_string*                      persistent_key;
+    bool persistent_dirty;    /* request changed connection state (SELECT, ...): do not reuse */
+    bool persistent_watching; /* WATCH may be active: UNWATCH before the client is reused */
+    bool persistent_selected; /* select() was called: restore the configured database */
+
     /* Last command error message (PHPRedis getLastError/clearLastError), NULL if none */
     zend_string* last_error;
+
+    pid_t client_pid; /* process that created glide_client (fork detection) */
 
     zend_object std; /* MUST be last - PHP allocates extra memory after this */
 } valkey_glide_object;

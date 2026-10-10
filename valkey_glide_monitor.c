@@ -90,8 +90,12 @@ zend_object* create_valkey_glide_monitor_object(zend_class_entry* ce) {
 static void valkey_glide_monitor_teardown(valkey_glide_monitor_object* obj) {
     if (obj->monitor_client_ptr) {
         /* Close the FFI connection FIRST so the background producer stops
-         * before we free the callback state it writes into. */
-        close_monitor_client(obj->monitor_client_ptr);
+         * before we free the callback state it writes into. A connection
+         * inherited through fork() is not closed: the child has no producer,
+         * and closing it from the child crashes or hangs. */
+        if (obj->client_pid == getpid()) {
+            close_monitor_client(obj->monitor_client_ptr);
+        }
         if (obj->info) {
             /* Preserve the cumulative drop count on the object before freeing
              * `info`, so getDroppedCount() still reports losses after close(). */
@@ -277,6 +281,7 @@ PHP_METHOD(ValkeyGlideMonitor, __construct) {
 
     obj->monitor_client_ptr = monitor_client_ptr;
     obj->info               = info;
+    obj->client_pid         = getpid();
 }
 
 /* ------------------------------------------------------------------ */
