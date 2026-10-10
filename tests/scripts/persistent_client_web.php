@@ -5,7 +5,7 @@
  * One server process handles every request, so a persistent client kept by one
  * request is visible to the next, as in a PHP-FPM worker.
  *
- * Query parameters: cluster, host, port (required), persistent, timeout, action.
+ * Query parameters: cluster, host, port (required), persistent, pconnect, timeout, action.
  * Prints JSON with the server-side CLIENT ID of the connection the request used.
  */
 
@@ -24,12 +24,13 @@ $is_cluster = ($_GET['cluster'] ?? '0') === '1';
 $host       = $_GET['host'] ?? '127.0.0.1';
 $port       = (int) $_GET['port'];
 $persistent = ($_GET['persistent'] ?? '1') === '1';
+$pconnect   = ($_GET['pconnect'] ?? '0') === '1';
 /* A different timeout is a different configuration, so a different kept client */
 $timeout    = isset($_GET['timeout']) ? (int) $_GET['timeout'] : null;
 $action     = $_GET['action'] ?? '';
 $key        = '{persistent}:watched';
 
-$connect = function () use ($is_cluster, $host, $port, $persistent, $timeout) {
+$connect = function () use ($is_cluster, $host, $port, $persistent, $pconnect, $timeout) {
     if ($is_cluster) {
         return new ValkeyGlideCluster(
             addresses: [['host' => $host, 'port' => $port]],
@@ -38,6 +39,10 @@ $connect = function () use ($is_cluster, $host, $port, $persistent, $timeout) {
         );
     }
     $client = new ValkeyGlide();
+    if ($pconnect) {
+        $client->pconnect(addresses: [['host' => $host, 'port' => $port]], request_timeout: $timeout);
+        return $client;
+    }
     $client->connect(
         addresses: [['host' => $host, 'port' => $port]],
         request_timeout: $timeout,

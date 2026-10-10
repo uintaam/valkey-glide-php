@@ -9497,6 +9497,14 @@ if (extension_loaded("valkey_glide") || dl("' . __DIR__ . '/../modules/valkey_gl
             $this->assertNotEquals($first, $plain1);
             $this->assertNotEquals($plain1, $plain2);
 
+            if (!$is_cluster) {
+                /* pconnect() without a persistent_id keeps its own client */
+                $pconnected = $id(['pconnect' => '1']);
+                $this->assertNotEquals($first, $pconnected);
+                $this->assertEquals($pconnected, $id(['pconnect' => '1']));
+                $this->assertEquals($first, $id());
+            }
+
             /* A second object with the same configuration in one request gets its own connection */
             $two = $get(['action' => 'two']);
             $this->assertEquals($first, $two['id']);
