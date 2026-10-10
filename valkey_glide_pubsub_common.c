@@ -768,7 +768,9 @@ void valkey_glide_pubsub_callback(uintptr_t      client_adapter_ptr,
 // Shutdown function
 void valkey_glide_pubsub_shutdown(void) {
     if (pubsub_callbacks_initialized) {
-        zend_hash_destroy(&pubsub_callbacks);
+        /* Clear the flag first so nothing looks entries up while the table
+         * is being destroyed */
         pubsub_callbacks_initialized = false;
+        zend_hash_destroy(&pubsub_callbacks);
     }
 }
