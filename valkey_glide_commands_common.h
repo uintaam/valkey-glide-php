@@ -933,41 +933,40 @@ static inline bool valkey_glide_legacy_reply_literal(zval* value) {
         }                                                                     \
     }
 
-#define GETOPTION_METHOD_IMPL(class_name)                                            \
-    PHP_METHOD(class_name, getOption) {                                              \
-        zend_long option;                                                            \
-                                                                                     \
-        ZEND_PARSE_PARAMETERS_START(1, 1)                                            \
-        Z_PARAM_LONG(option)                                                         \
-        ZEND_PARSE_PARAMETERS_END();                                                 \
-                                                                                     \
-        valkey_glide_object* valkey_glide =                                          \
-            VALKEY_GLIDE_PHP_ZVAL_GET_OBJECT(valkey_glide_object, getThis());        \
-        if (!valkey_glide) {                                                         \
-            RETURN_FALSE;                                                            \
-        }                                                                            \
-                                                                                     \
-        switch (option) {                                                            \
-            case VALKEY_GLIDE_OPT_REPLY_LITERAL_LEGACY:                              \
-            case VALKEY_GLIDE_OPT_REPLY_LITERAL:                                     \
-                RETURN_BOOL(valkey_glide->opt_reply_literal);                        \
-            case VALKEY_GLIDE_OPT_PREFIX:                                            \
-                if (valkey_glide->prefix) {                                          \
-                    RETURN_STR_COPY(valkey_glide->prefix);                           \
-                }                                                                    \
-                RETURN_NULL();                                                       \
-            case VALKEY_GLIDE_OPT_SCAN:                                              \
-                RETURN_LONG(valkey_glide->scan_prefix ? VALKEY_GLIDE_SCAN_PREFIX     \
-                                                      : VALKEY_GLIDE_SCAN_NOPREFIX); \
-            case VALKEY_GLIDE_OPT_SLAVE_FAILOVER:                                    \
-                if (!instanceof_function(Z_OBJCE_P(getThis()),                       \
-                                         get_valkey_glide_cluster_ce())) {           \
-                    RETURN_FALSE;                                                    \
-                }                                                                    \
-                RETURN_LONG(valkey_glide->opt_slave_failover);                       \
-            default:                                                                 \
-                RETURN_FALSE;                                                        \
-        }                                                                            \
+#define GETOPTION_METHOD_IMPL(class_name)                                                        \
+    PHP_METHOD(class_name, getOption) {                                                          \
+        zend_long option;                                                                        \
+                                                                                                 \
+        ZEND_PARSE_PARAMETERS_START(1, 1)                                                        \
+        Z_PARAM_LONG(option)                                                                     \
+        ZEND_PARSE_PARAMETERS_END();                                                             \
+                                                                                                 \
+        valkey_glide_object* valkey_glide =                                                      \
+            VALKEY_GLIDE_PHP_ZVAL_GET_OBJECT(valkey_glide_object, getThis());                    \
+        if (!valkey_glide) {                                                                     \
+            RETURN_FALSE;                                                                        \
+        }                                                                                        \
+                                                                                                 \
+        switch (option) {                                                                        \
+            case VALKEY_GLIDE_OPT_REPLY_LITERAL_LEGACY:                                          \
+            case VALKEY_GLIDE_OPT_REPLY_LITERAL:                                                 \
+                RETURN_BOOL(valkey_glide->opt_reply_literal);                                    \
+            case VALKEY_GLIDE_OPT_PREFIX:                                                        \
+                if (valkey_glide->prefix) {                                                      \
+                    RETURN_STR_COPY(valkey_glide->prefix);                                       \
+                }                                                                                \
+                RETURN_NULL();                                                                   \
+            case VALKEY_GLIDE_OPT_SCAN:                                                          \
+                RETURN_LONG(valkey_glide->scan_prefix ? VALKEY_GLIDE_SCAN_PREFIX                 \
+                                                      : VALKEY_GLIDE_SCAN_NOPREFIX);             \
+            case VALKEY_GLIDE_OPT_SLAVE_FAILOVER:                                                \
+                if (!instanceof_function(Z_OBJCE_P(getThis()), get_valkey_glide_cluster_ce())) { \
+                    RETURN_FALSE;                                                                \
+                }                                                                                \
+                RETURN_LONG(valkey_glide->opt_slave_failover);                                   \
+            default:                                                                             \
+                RETURN_FALSE;                                                                    \
+        }                                                                                        \
     }
 
 /* Key prefix helper - matching PHPRedis _prefix() */

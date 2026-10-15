@@ -38,8 +38,8 @@
 extern zend_class_entry* ce;
 extern zend_class_entry* get_valkey_glide_exception_ce();
 
-#include "valkey_glide_pubsub_common.h"
 #include "valkey_glide_prefix.h"
+#include "valkey_glide_pubsub_common.h"
 
 /* Import the string conversion functions from command_response.c */
 extern char* long_to_string(long value, size_t* len);
@@ -536,8 +536,8 @@ bool valkey_glide_set_failover(valkey_glide_object* valkey_glide, zval* value) {
     zend_long                   failover = zval_get_long(value);
     ConnectionRequest__ReadFrom read_from;
 
-    /* Standalone clients have no saved request; PHPRedis Redis also rejects this option */
-    if (!valkey_glide->connection_request) {
+    /* Standalone clients have no read routing to change; PHPRedis Redis also rejects this option */
+    if (!instanceof_function(valkey_glide->std.ce, get_valkey_glide_cluster_ce())) {
         return false;
     }
     if (!valkey_glide->glide_client) {
@@ -546,6 +546,32 @@ bool valkey_glide_set_failover(valkey_glide_object* valkey_glide, zval* value) {
     }
     if (!failover_to_read_from(failover, &read_from)) {
         valkey_glide_set_last_error(valkey_glide, "OPT_SLAVE_FAILOVER: unknown FAILOVER_* mode");
+        return false;
+    }
+
+    /* A persistent client is shared with later requests that expect the routing in its key,
+     * and one reused from an earlier request has no saved request to recreate it from */
+    if (valkey_glide->persistent) {
+        ConnectionRequest__ReadFrom current;
+        if (failover_to_read_from(valkey_glide->opt_slave_failover, &current) &&
+            current == read_from) {
+            valkey_glide->opt_slave_failover = failover;
+            return true;
+        }
+        valkey_glide_set_last_error(valkey_glide,
+                                    "OPT_SLAVE_FAILOVER cannot be changed on a persistent client");
+        return false;
+    }
+
+    /* setOption() is exempt from the fork guard, but this closes the client: in a child that
+     * would close the parent's client */
+    if (valkey_glide->client_pid != getpid()) {
+        valkey_glide_set_last_error(valkey_glide, VALKEY_GLIDE_FORK_ERROR);
+        return false;
+    }
+    if (!valkey_glide->connection_request) {
+        valkey_glide_set_last_error(valkey_glide,
+                                    "OPT_SLAVE_FAILOVER: no saved connection request");
         return false;
     }
 
@@ -612,6 +638,9 @@ bool valkey_glide_set_failover(valkey_glide_object* valkey_glide, zval* value) {
 
     close_glide_client(valkey_glide->glide_client);
     valkey_glide->glide_client = conn_resp->conn_ptr;
+    valkey_glide->client_pid   = getpid();
+    /* Cluster SCAN finds the object (OPT_PREFIX) from the client handle */
+    valkey_glide_prefix_track_client(valkey_glide->glide_client, valkey_glide);
     free_connection_response((ConnectionResponse*) conn_resp);
 
     efree(valkey_glide->connection_request);

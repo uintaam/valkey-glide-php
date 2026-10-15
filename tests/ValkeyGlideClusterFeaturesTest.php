@@ -1806,14 +1806,16 @@ class ValkeyGlideClusterFeaturesTest extends ValkeyGlideClusterBaseTest
             $this->assertTrue($client->unwatch());
             $this->assertTrue($client->setOption(ValkeyGlideCluster::OPT_SLAVE_FAILOVER, ValkeyGlideCluster::FAILOVER_DISTRIBUTE_SLAVES));
 
-            // A queued UNWATCH that is discarded never reaches the server
+            // DISCARD of a client-side MULTI sends UNWATCH, which ends the WATCH
             $this->assertTrue($client->watch($key));
             $client->multi();
             $client->unwatch();
             $client->discard();
-            $this->assertFalse($client->setOption(ValkeyGlideCluster::OPT_SLAVE_FAILOVER, ValkeyGlideCluster::FAILOVER_NONE));
+            $this->assertTrue($client->setOption(ValkeyGlideCluster::OPT_SLAVE_FAILOVER, ValkeyGlideCluster::FAILOVER_NONE));
+            $this->assertTrue($client->setOption(ValkeyGlideCluster::OPT_SLAVE_FAILOVER, ValkeyGlideCluster::FAILOVER_DISTRIBUTE_SLAVES));
 
             // A transaction rejected before EXEC leaves the WATCH in place
+            $this->assertTrue($client->watch($key));
             $client->multi();
             $client->set('{slot_a}' . $key, 'value');
             $client->set('{slot_b}' . $key, 'value');
@@ -1845,6 +1847,27 @@ class ValkeyGlideClusterFeaturesTest extends ValkeyGlideClusterBaseTest
         // Closed, even for the current mode
         $this->assertFalse($client->setOption(ValkeyGlideCluster::OPT_SLAVE_FAILOVER, ValkeyGlideCluster::FAILOVER_NONE));
         $this->assertFalse($client->setOption(ValkeyGlideCluster::OPT_SLAVE_FAILOVER, ValkeyGlideCluster::FAILOVER_DISTRIBUTE_SLAVES));
+    }
+
+    public function testOptSlaveFailoverRejectedOnPersistentClient()
+    {
+        // Later requests reuse a persistent client expecting the routing it was created with. The
+        // second pass reuses the client the first pass kept, which has no saved request.
+        for ($pass = 0; $pass < 2; $pass++) {
+            $client = new ValkeyGlideCluster(
+                addresses: [['host' => $this->getHost(), 'port' => $this->getPort()]],
+                persistent: true,
+            );
+            try {
+                $this->assertEquals(ValkeyGlideCluster::FAILOVER_NONE, $client->getOption(ValkeyGlideCluster::OPT_SLAVE_FAILOVER));
+                $this->assertTrue($client->setOption(ValkeyGlideCluster::OPT_SLAVE_FAILOVER, ValkeyGlideCluster::FAILOVER_ERROR));
+                $this->assertFalse($client->setOption(ValkeyGlideCluster::OPT_SLAVE_FAILOVER, ValkeyGlideCluster::FAILOVER_DISTRIBUTE_SLAVES));
+                $this->assertStringContains('persistent', $client->getLastError());
+                $this->assertTrue($client->ping(['type' => 'primarySlotKey', 'key' => 'test']));
+            } finally {
+                $client->close();
+            }
+        }
     }
 
     public function testOptSlaveFailoverUsesUpdatedPassword()
