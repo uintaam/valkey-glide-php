@@ -651,6 +651,8 @@ bool valkey_glide_set_failover(valkey_glide_object* valkey_glide, zval* value) {
     close_glide_client(valkey_glide->glide_client);
     valkey_glide->glide_client = conn_resp->conn_ptr;
     free_connection_response((ConnectionResponse*) conn_resp);
+    /* Cluster SCAN finds the object (OPT_PREFIX) from the client handle */
+    valkey_glide_prefix_track_client(valkey_glide->glide_client, valkey_glide);
 
     efree(valkey_glide->connection_request);
     valkey_glide->connection_request     = request_bytes;
