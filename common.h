@@ -416,11 +416,20 @@ typedef enum {
     /* Deprecated value of OPT_REPLY_LITERAL. PHPRedis uses 1 for OPT_SERIALIZER, so it is only
      * accepted with a bool value. Remove in the next major release. */
     VALKEY_GLIDE_OPT_REPLY_LITERAL_LEGACY = 1,
+    VALKEY_GLIDE_OPT_PREFIX               = 2, /* Key prefix applied to every key argument */
+    VALKEY_GLIDE_OPT_SCAN = 4, /* SCAN behaviour: SCAN_RETRY and SCAN_PREFIX bits */
     VALKEY_GLIDE_OPT_REPLY_LITERAL = 8 /* Return "OK" string instead of true for Ok responses */
 } valkey_glide_option_t;
 
 /* Persistent client entry (valkey_glide_persistent.c) */
 typedef struct valkey_glide_persistent_client valkey_glide_persistent_client_t;
+
+/* OPT_SCAN values, numerically identical to PHPRedis. RETRY and PREFIX are
+ * independent bits; NORETRY and NOPREFIX clear them. */
+#define VALKEY_GLIDE_SCAN_NORETRY 0  /* Return empty pages to the caller (default) */
+#define VALKEY_GLIDE_SCAN_RETRY 1    /* Keep scanning past empty pages */
+#define VALKEY_GLIDE_SCAN_PREFIX 2   /* Prefix the SCAN MATCH pattern with OPT_PREFIX */
+#define VALKEY_GLIDE_SCAN_NOPREFIX 3 /* Send the SCAN MATCH pattern unchanged (default) */
 
 typedef struct {
     const void*           glide_client; /* Valkey Glide client pointer */
@@ -431,7 +440,10 @@ typedef struct {
     bool                  is_in_batch_mode;
 
     /* Runtime options (like PHPRedis OPT_* settings) */
-    bool opt_reply_literal; /* OPT_REPLY_LITERAL: return "OK" string instead of true */
+    bool         opt_reply_literal; /* OPT_REPLY_LITERAL: return "OK" string instead of true */
+    zend_string* prefix;            /* OPT_PREFIX: key prefix, NULL if unset */
+    bool         scan_prefix;       /* OPT_SCAN SCAN_PREFIX: prefix the SCAN MATCH pattern */
+    bool         scan_retry;        /* OPT_SCAN SCAN_RETRY: skip empty SCAN pages */
 
     AddressResolverCallback resolver_cb; /* NULL if no address resolver */
 
