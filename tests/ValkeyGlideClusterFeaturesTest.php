@@ -1840,14 +1840,16 @@ class ValkeyGlideClusterFeaturesTest extends ValkeyGlideClusterBaseTest
             $this->assertTrue($client->setOption(ValkeyGlideCluster::OPT_SLAVE_FAILOVER, ValkeyGlideCluster::FAILOVER_NONE));
             $this->assertTrue($client->setOption(ValkeyGlideCluster::OPT_SLAVE_FAILOVER, ValkeyGlideCluster::FAILOVER_DISTRIBUTE_SLAVES));
 
-            // A queued UNWATCH that is discarded never reaches the server
+            // DISCARD of a client-side MULTI sends UNWATCH, which ends the WATCH
             $this->assertTrue($client->watch($key));
             $client->multi();
             $client->unwatch();
             $client->discard();
-            $this->assertFalse($client->setOption(ValkeyGlideCluster::OPT_SLAVE_FAILOVER, ValkeyGlideCluster::FAILOVER_NONE));
+            $this->assertTrue($client->setOption(ValkeyGlideCluster::OPT_SLAVE_FAILOVER, ValkeyGlideCluster::FAILOVER_NONE));
+            $this->assertTrue($client->setOption(ValkeyGlideCluster::OPT_SLAVE_FAILOVER, ValkeyGlideCluster::FAILOVER_DISTRIBUTE_SLAVES));
 
             // A transaction rejected before EXEC leaves the WATCH in place
+            $this->assertTrue($client->watch($key));
             $client->multi();
             $client->set('{slot_a}' . $key, 'value');
             $client->set('{slot_b}' . $key, 'value');
