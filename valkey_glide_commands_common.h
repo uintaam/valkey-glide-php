@@ -914,11 +914,15 @@ void execute_script_command(zval* object, int argc, zval* return_value, zend_cla
         switch (option) {                                                     \
             case VALKEY_GLIDE_OPT_REPLY_LITERAL:                              \
                 RETURN_BOOL(valkey_glide->opt_reply_literal);                 \
-            case VALKEY_GLIDE_OPT_SLAVE_FAILOVER:                             \
-                if (!valkey_glide->connection_request) {                      \
+            case VALKEY_GLIDE_OPT_SLAVE_FAILOVER: {                           \
+                /* A reused persistent client has no connection_request */    \
+                zend_class_entry* cluster_ce = get_valkey_glide_cluster_ce(); \
+                if (!valkey_glide->glide_client ||                            \
+                    !instanceof_function(valkey_glide->std.ce, cluster_ce)) { \
                     RETURN_FALSE;                                             \
                 }                                                             \
                 RETURN_LONG(valkey_glide->opt_slave_failover);                \
+            }                                                                 \
             default:                                                          \
                 RETURN_FALSE;                                                 \
         }                                                                     \

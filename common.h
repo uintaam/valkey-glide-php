@@ -441,6 +441,7 @@ typedef struct {
     /* Runtime options (like PHPRedis OPT_* settings) */
     bool      opt_reply_literal;  /* OPT_REPLY_LITERAL: return "OK" string instead of true */
     zend_long opt_slave_failover; /* OPT_SLAVE_FAILOVER: cluster only, FAILOVER_* mode */
+    bool read_from_az; /* read_from is an AZ strategy, which no FAILOVER_* mode matches exactly */
 
     /* Serialized connection request, kept so OPT_SLAVE_FAILOVER can recreate the client with a
      * different read_from. Cluster only; NULL for standalone clients. */
