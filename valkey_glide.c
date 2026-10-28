@@ -1074,6 +1074,10 @@ void free_valkey_glide_object(zend_object* object) {
     /* Close the Valkey Glide client (freeing its address resolver), or keep a persistent one
      * for the next request */
     valkey_glide_release_client(valkey_glide, false);
+    if (valkey_glide->connection_request) {
+        efree(valkey_glide->connection_request);
+        valkey_glide->connection_request = NULL;
+    }
 
     /* Clean up the standard object */
     zend_object_std_dtor(&valkey_glide->std);
