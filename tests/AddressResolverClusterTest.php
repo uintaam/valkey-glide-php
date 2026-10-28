@@ -108,6 +108,52 @@ class AddressResolverClusterTest extends ValkeyGlideClusterBaseTest
         $clientB->close();
     }
 
+    /**
+     * A client still open when the request ends (here in a static property) is
+     * freed after RSHUTDOWN. Its resolver must stay valid until then, because the
+     * client's background threads can still call it.
+     */
+    public function testClientOpenAtRequestShutdown()
+    {
+        $this->skipIfTlsEnabled();
+        if ($this->getAuth()) {
+            $this->markTestSkipped('The helper script connects without auth');
+        }
+        if (!function_exists('proc_open')) {
+            $this->markTestSkipped('proc_open is not available');
+        }
+
+        $extension_path = __DIR__ . '/../modules/valkey_glide.so';
+        $extension = file_exists($extension_path) ? $extension_path : 'valkey_glide';
+        $marker = tempnam(sys_get_temp_dir(), 'resolver_shutdown_');
+        $cmd = [PHP_BINARY, '-n', '-d', "extension=$extension",
+                __DIR__ . '/scripts/resolver_client_open_at_shutdown.php',
+                $this->getHost(), (string) $this->getPort(), $extension, $marker];
+        /* Overwrite freed memory, so a call into a freed resolver crashes. On
+         * Linux this also needs libffi to allocate closures with malloc (static
+         * trampolines, libffi 3.4+); musl ignores MALLOC_PERTURB_ */
+        $env = getenv() + ['MallocScribble' => '1', 'MALLOC_PERTURB_' => '85'];
+
+        try {
+            for ($run = 0; $run < 3; $run++) {
+                file_put_contents($marker, '');
+                $proc = proc_open($cmd, [1 => ['pipe', 'w'], 2 => ['file', '/dev/null', 'w']], $pipes, null, $env);
+                $this->assertTrue(is_resource($proc));
+                $out = stream_get_contents($pipes[1]);
+                fclose($pipes[1]);
+                $status = proc_close($proc);
+
+                /* The core also logs to stdout */
+                $this->assertStringContains("done\n", $out);
+                $this->assertEquals(0, $status, "Run $run exited with status $status");
+                /* Without the reconnects nothing calls the resolver after RSHUTDOWN */
+                $this->assertEquals('killed', file_get_contents($marker), "Run $run did not drop the connections");
+            }
+        } finally {
+            @unlink($marker);
+        }
+    }
+
     public function testNullAddressResolverConnectsNormally()
     {
         $this->skipIfTlsEnabled();
